@@ -549,12 +549,25 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
       rtcConfig.encodedInsertableStreams = true;
     }
 
+    const currentUrl = new URL(window.location.href);
+    const forceRelay = currentUrl.searchParams.get('forceRelay') === '1';
+    const forceTLS = currentUrl.searchParams.get('forceTLS') === '1';
+    const verbose = currentUrl.searchParams.get('verbose') === '1';
+
+    if (verbose) {
+      console.log('FORCE RELAY', forceRelay);
+      console.log('FORCE TLS', forceTLS);
+    }
+
     // update ICE servers before creating PeerConnection
     if (serverResponse.iceServers && !rtcConfig.iceServers) {
       const rtcIceServers: RTCIceServer[] = [];
       serverResponse.iceServers.forEach((iceServer) => {
+        const urls = forceTLS
+          ? iceServer.urls.filter((url) => url.startsWith('turns'))
+          : iceServer.urls;
         const rtcIceServer: RTCIceServer = {
-          urls: iceServer.urls,
+          urls,
         };
         if (iceServer.username) rtcIceServer.username = iceServer.username;
         if (iceServer.credential) {
@@ -563,11 +576,14 @@ export default class RTCEngine extends (EventEmitter as new () => TypedEventEmit
         rtcIceServers.push(rtcIceServer);
       });
       rtcConfig.iceServers = rtcIceServers;
+      if (verbose) console.log('USING ICE SERVERS', rtcConfig.iceServers);
     }
 
     if (
-      serverResponse.clientConfiguration &&
-      serverResponse.clientConfiguration.forceRelay === ClientConfigSetting.ENABLED
+      forceRelay ||
+      forceTLS ||
+      (serverResponse.clientConfiguration &&
+        serverResponse.clientConfiguration.forceRelay === ClientConfigSetting.ENABLED)
     ) {
       rtcConfig.iceTransportPolicy = 'relay';
     }
